@@ -94,12 +94,18 @@ export default function Footer() {
 
         <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-500">
           <p>© {new Date().getFullYear()} {ACADEMY_DATA.name} (Ranchi). All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <span>Estd. {ACADEMY_DATA.founded}</span>
             <span className="w-1 h-1 rounded-full bg-slate-700"></span>
             <span>ISO 9001:2015 Center</span>
-            <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-            <Link to="/admin" className="hover:text-indigo-400 transition-colors">Admin Login</Link>
+            <Link
+              to="/admin"
+              id="admin-panel-button"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Admin Panel
+            </Link>
           </div>
         </div>
 

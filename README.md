@@ -21,31 +21,34 @@ Marketing website and certificate management system for **Complete Study** (Ranc
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in your credentials (see below)
 npm run dev                  # http://localhost:3000
 ```
 
+(The public config in `.env` is committed, so no setup is needed. For local overrides use `.env.local`.)
+
 ## Configuration
 
-All configuration lives in environment variables (see `.env.example`). Never commit real credentials — `.env.local` is git-ignored.
+All configuration lives in environment variables. The shared, **public-by-design** values (Firebase web config, Cloudinary cloud name + unsigned preset name) are committed in [`.env`](./.env) — Vercel deploys work with **zero environment-variable setup**. Local overrides/secrets go in `.env.local` (git-ignored).
+
+### Current backend status (last checked 2026-09-09 via the *Backend setup & checks* workflow)
+
+| Item | Status |
+|---|---|
+| Firebase project (`completestudy-53623`) | ✅ Configured |
+| Firestore database | ✅ Exists; public reads + writes confirmed working |
+| Firestore security rules | ⚠️ Database is in **test mode** (open access) — publish the rules from [`firestore.rules`](./firestore.rules) (see below). The app keeps working identically, but writes become schema-validated and access stays permanent (test mode expires). |
+| Cloudinary cloud (`h8x01q58`) | ✅ Configured |
+| Cloudinary unsigned upload preset (`completestudy-certificates`) | ⚠️ Pending — one small step, see below |
 
 ### 1. Firebase (Firestore — certificate data)
 
-1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Add project** (or use an existing one).
-2. In the project, click the **Web (`</>`)** icon to register a web app. Copy the `firebaseConfig` values.
-3. **Create the database**: Build → Firestore Database → **Create database** (choose production mode, pick a region).
-4. **Publish the security rules**: copy the contents of [`firestore.rules`](./firestore.rules) into Firestore → Rules → Publish.
-   (Or with the Firebase CLI: `npx firebase-tools deploy --only firestore:rules`.)
-5. Put the values into `.env.local`:
+Already configured. Console steps still needed:
 
-```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-```
+1. **Publish the security rules** (recommended soon — the database is currently in test mode):
+   - Firebase Console → Build → **Firestore Database** → **Rules** tab
+   - Replace everything with the contents of [`firestore.rules`](./firestore.rules)
+   - Click **Publish**
+2. Optional: add `VITE_FIREBASE_APP_ID` to `.env` (only needed for Firebase Analytics — not required for this app).
 
 **Data model** — collection `certificates`, one document per certificate:
 
@@ -63,17 +66,20 @@ VITE_FIREBASE_APP_ID=...
 
 ### 2. Cloudinary (PDF/image file storage)
 
-1. Create a free account at [cloudinary.com](https://cloudinary.com).
-2. From the **Dashboard**, copy your **Cloud name**.
-3. Go to **Settings → Upload → Add upload preset**:
-   - **Signing mode:** `Unsigned`
-   - **Allowed formats:** restrict to `pdf, png, jpg, jpeg, webp` (recommended)
-4. Put the values into `.env.local`:
+The cloud name is already configured. The only remaining step is the **unsigned upload preset** `completestudy-certificates` — pick ONE of these:
 
-```
-VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
-VITE_CLOUDINARY_UPLOAD_PRESET=your-unsigned-preset-name
-```
+**Option A — automatic (recommended):**
+1. This repo → **Settings → Secrets and variables → Actions → New repository secret** (twice):
+   - Name: `CLOUDINARY_API_KEY` — value: your Cloudinary API Key
+   - Name: `CLOUDINARY_API_SECRET` — value: your Cloudinary API Secret
+2. Re-run the **Backend setup & checks** workflow (Actions tab → select the workflow → Run workflow, after it is on the `main` branch) — or push any change to `.env`/the workflow. The preset is created automatically (unsigned, formats pdf/jpg/jpeg/png/webp, folder `certificates`).
+
+**Option B — manual (2 minutes):**
+1. [Cloudinary Console](https://console.cloudinary.com) → **Settings → Upload → Add upload preset**
+2. Name: `completestudy-certificates`
+3. **Signing mode:** `Unsigned`
+4. Allowed formats: `pdf, jpg, jpeg, png, webp` (recommended)
+5. Save.
 
 Uploads go directly from the browser to Cloudinary's upload API using the unsigned preset, so **no secret API key is ever exposed** in the frontend. Deleting a record in the admin panel removes it from Firestore; the underlying Cloudinary file remains in your Cloudinary media library (removing it requires the API secret, which must never live in the browser).
 
