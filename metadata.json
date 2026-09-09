@@ -1,0 +1,8 @@
+{
+  "name": "Complete Study Academy",
+  "description": "Top Computer Training & Academic Coaching center in Ranchi offering DCA, Tally, and board tuition.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
