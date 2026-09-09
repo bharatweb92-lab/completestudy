@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ACADEMY_DATA, COURSES } from '../data';
 import { MapPin, Phone, Mail } from 'lucide-react';
 
@@ -51,6 +52,7 @@ export default function Footer() {
               <li><a href="#lab-tour" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Computer Lab Tour</a></li>
               <li><a href="#mentors" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Faculty Mentors</a></li>
               <li><a href="#reviews" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Student Reviews</a></li>
+              <li><a href="#verify" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Verify Certificate</a></li>
               <li><a href="#" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Back to Header Top</a></li>
             </ul>
           </div>
@@ -96,6 +98,8 @@ export default function Footer() {
             <span>Estd. {ACADEMY_DATA.founded}</span>
             <span className="w-1 h-1 rounded-full bg-slate-700"></span>
             <span>ISO 9001:2015 Center</span>
+            <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+            <Link to="/admin" className="hover:text-indigo-400 transition-colors">Admin Login</Link>
           </div>
         </div>
 
