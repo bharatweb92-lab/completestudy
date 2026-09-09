@@ -20,7 +20,14 @@ export const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 export const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 export function isFirebaseConfigured(): boolean {
-  return Object.values(firebaseConfig).every((value) => !isPlaceholder(value));
+  // Firestore needs apiKey, authDomain and projectId. The remaining values
+  // (storageBucket, messagingSenderId, appId) are optional — appId is only
+  // required for services like Analytics.
+  return (
+    !isPlaceholder(firebaseConfig.apiKey) &&
+    !isPlaceholder(firebaseConfig.authDomain) &&
+    !isPlaceholder(firebaseConfig.projectId)
+  );
 }
 
 export function isCloudinaryConfigured(): boolean {

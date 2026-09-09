@@ -1,0 +1,104 @@
+name: Backend setup & checks
+
+# Keeps the external services of the Complete Study admin panel in order:
+#  1. cloudinary  — ensures the unsigned upload preset used for browser
+#                   certificate uploads exists (needs the Cloudinary API key/
+#                   secret, stored in GitHub Secrets).
+#  2. firestore   — checks that the Firestore database exists and whether the
+#                   security rules currently allow the reads/writes the app
+#                   needs (public reads, schema-validated writes).
+#
+# Triggers automatically when the relevant config files change on the working
+# branch, and can be run manually from the Actions tab ("Run workflow").
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/**', 'main']
+    paths:
+      - '.github/workflows/backend-setup.yml'
+      - 'scripts/cloudinary-setup.mjs'
+      - '.env'
+      - 'firestore.rules'
+
+jobs:
+  cloudinary:
+    name: Cloudinary — upload preset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Ensure unsigned upload preset exists
+        env:
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: |
+          if [ -z "$CLOUDINARY_API_KEY" ] || [ -z "$CLOUDINARY_API_SECRET" ]; then
+            echo "::warning::CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET secrets are not set."
+            echo "Add them under Settings → Secrets and variables → Actions, then re-run this workflow."
+            exit 1
+          fi
+          set -a; source .env; set +a
+          node scripts/cloudinary-setup.mjs
+
+  firestore:
+    name: Firestore — database & rules check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check database state via REST API
+        run: |
+          set -a; source .env; set +a
+          PROJECT="$VITE_FIREBASE_PROJECT_ID"
+          KEY="$VITE_FIREBASE_API_KEY"
+          BASE="https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents"
+
+          echo "Project: $PROJECT"
+          echo "Missing fields:"; grep -oE '^VITE_FIREBASE_[A-Z_]+' .env | grep -vE 'API_KEY|AUTH_DOMAIN|PROJECT_ID|STORAGE_BUCKET|MESSAGING_SENDER_ID' || echo "  (none)"
+
+          echo ""
+          echo "── Read test (public read of 'certificates' collection) ──"
+          HTTP=$(curl -s -o read_resp.json -w "%{http_code}" "${BASE}/certificates?key=${KEY}&pageSize=1")
+          echo "HTTP ${HTTP}"
+          if [ "$HTTP" = "200" ]; then
+            echo "PASS — Firestore database exists and public reads are allowed."
+          elif [ "$HTTP" = "403" ]; then
+            echo "READS BLOCKED — the current rules deny public reads."
+            echo "Publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
+            head -c 400 read_resp.json; echo
+          elif [ "$HTTP" = "404" ]; then
+            echo "DATABASE NOT FOUND — create the Firestore database first:"
+            echo "Firebase Console → Build → Firestore Database → Create database (production mode)."
+            head -c 400 read_resp.json; echo
+          else
+            echo "Unexpected response:"; head -c 400 read_resp.json; echo
+          fi
+
+          echo ""
+          echo "── Write test (temporary document in '_setup_check') ──"
+          HTTP=$(curl -s -o write_resp.json -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"fields":{"purpose":{"stringValue":"github-actions backend check"}}}' \
+            "${BASE}/_setup_check?key=${KEY}")
+          echo "HTTP ${HTTP}"
+          DOC_NAME=$(node -e "try{const r=require('./write_resp.json');console.log(r.name||'')}catch{}")
+          if [ "$HTTP" = "200" ] && [ -n "$DOC_NAME" ]; then
+            echo "PASS — writes are currently allowed."
+            echo "Cleaning up test document…"
+            DEL_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "https://firestore.googleapis.com/v1/${DOC_NAME}?key=${KEY}")
+            echo "Delete HTTP ${DEL_HTTP}"
+            if [ "$DEL_HTTP" != "200" ]; then
+              echo "::warning::Could not delete the test document — remove it manually: ${DOC_NAME}"
+            fi
+          elif [ "$HTTP" = "403" ]; then
+            echo "WRITES BLOCKED — the current rules deny writes."
+            echo "Publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
+            head -c 400 write_resp.json; echo
+          else
+            echo "(write test skipped or failed — see response)"; head -c 400 write_resp.json; echo
+          fi

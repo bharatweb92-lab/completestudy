@@ -4,8 +4,11 @@ node_modules/
 # Build output
 dist/
 
-# Local environment files (never commit real credentials)
-.env
+# Local environment overrides & secrets (never commit real credentials).
+# NOTE: the shared public app config lives in `.env` and IS committed — it only
+# contains public-by-design values (Firebase web config, Cloudinary cloud name
+# and unsigned preset name). Real secrets (Cloudinary API secret, service
+# account keys) must never be committed.
 .env.local
 .env.*.local
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ACADEMY_DATA, COURSES } from '../data';
-import { MapPin, Phone, Mail } from 'lucide-react';
+import { MapPin, Phone, Mail, Lock } from 'lucide-react';
 
 export default function Footer() {
   return (
