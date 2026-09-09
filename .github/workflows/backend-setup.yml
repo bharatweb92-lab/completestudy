@@ -8,8 +8,9 @@ name: Backend setup & checks
 #                   security rules currently allow the reads/writes the app
 #                   needs (public reads, schema-validated writes).
 #
-# Triggers automatically when the relevant config files change on the working
-# branch, and can be run manually from the Actions tab ("Run workflow").
+# Triggers automatically when the relevant config files change, and can be
+# run manually from the Actions tab ("Run workflow") once merged to main.
+# Results are written to the job summary and as annotations.
 
 on:
   workflow_dispatch:
@@ -37,13 +38,36 @@ jobs:
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         run: |
+          SUMMARY="${GITHUB_STEP_SUMMARY}"
+          {
+            echo "## Cloudinary — upload preset"
+          } >> "$SUMMARY"
           if [ -z "$CLOUDINARY_API_KEY" ] || [ -z "$CLOUDINARY_API_SECRET" ]; then
-            echo "::warning::CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET secrets are not set."
-            echo "Add them under Settings → Secrets and variables → Actions, then re-run this workflow."
+            echo "::notice title=Cloudinary secrets missing::Add CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET under Settings → Secrets and variables → Actions, then re-run this workflow. Alternatively create the unsigned preset 'completestudy-certificates' manually in the Cloudinary console (see README.md)."
+            {
+              echo "### ⚠️ Action needed"
+              echo "The **CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET** GitHub secrets are not set, so the preset could not be created automatically."
+              echo ""
+              echo "**Option A (recommended):** repo → Settings → Secrets and variables → Actions → New repository secret — add both values, then re-run this workflow."
+              echo "**Option B:** create the preset manually in the Cloudinary console: Settings → Upload → Add upload preset — name \`completestudy-certificates\`, Signing mode **Unsigned**, formats pdf/jpg/jpeg/png/webp (see README.md)."
+            } >> "$SUMMARY"
             exit 1
           fi
           set -a; source .env; set +a
-          node scripts/cloudinary-setup.mjs
+          if node scripts/cloudinary-setup.mjs; then
+            echo "::notice title=Cloudinary preset OK::The unsigned upload preset is configured correctly."
+            {
+              echo "### ✅ Preset ready"
+              echo "The unsigned upload preset \`${VITE_CLOUDINARY_UPLOAD_PRESET}\` exists with the correct settings."
+            } >> "$SUMMARY"
+          else
+            echo "::error title=Cloudinary preset setup failed::See the job log for the API response."
+            {
+              echo "### ❌ Preset setup failed"
+              echo "Check the job log for the Cloudinary API response."
+            } >> "$SUMMARY"
+            exit 1
+          fi
 
   firestore:
     name: Firestore — database & rules check
@@ -53,52 +77,122 @@ jobs:
 
       - name: Check database state via REST API
         run: |
+          SUMMARY="${GITHUB_STEP_SUMMARY}"
           set -a; source .env; set +a
           PROJECT="$VITE_FIREBASE_PROJECT_ID"
           KEY="$VITE_FIREBASE_API_KEY"
           BASE="https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents"
 
-          echo "Project: $PROJECT"
-          echo "Missing fields:"; grep -oE '^VITE_FIREBASE_[A-Z_]+' .env | grep -vE 'API_KEY|AUTH_DOMAIN|PROJECT_ID|STORAGE_BUCKET|MESSAGING_SENDER_ID' || echo "  (none)"
+          {
+            echo "## Firestore — database & rules check"
+            echo "Project: \`${PROJECT}\`"
+          } >> "$SUMMARY"
 
-          echo ""
           echo "── Read test (public read of 'certificates' collection) ──"
-          HTTP=$(curl -s -o read_resp.json -w "%{http_code}" "${BASE}/certificates?key=${KEY}&pageSize=1")
-          echo "HTTP ${HTTP}"
-          if [ "$HTTP" = "200" ]; then
-            echo "PASS — Firestore database exists and public reads are allowed."
-          elif [ "$HTTP" = "403" ]; then
-            echo "READS BLOCKED — the current rules deny public reads."
-            echo "Publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
-            head -c 400 read_resp.json; echo
-          elif [ "$HTTP" = "404" ]; then
-            echo "DATABASE NOT FOUND — create the Firestore database first:"
-            echo "Firebase Console → Build → Firestore Database → Create database (production mode)."
-            head -c 400 read_resp.json; echo
+          READ_HTTP=$(curl -s -o read_resp.json -w "%{http_code}" "${BASE}/certificates?key=${KEY}&pageSize=1")
+          echo "HTTP ${READ_HTTP}"
+          if [ "$READ_HTTP" = "200" ]; then
+            READ_STATE="allowed"
+            echo "::notice title=Firestore reads OK::Public reads are allowed (HTTP 200)."
+            echo "READ_RESULT=allowed" >> "$GITHUB_OUTPUT" || true
+          elif [ "$READ_HTTP" = "403" ]; then
+            READ_STATE="blocked-by-rules"
+            echo "::error title=Firestore reads blocked::Current rules deny public reads — publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
+          elif [ "$READ_HTTP" = "404" ]; then
+            READ_STATE="database-missing"
+            echo "::error title=Firestore database missing::Create the Firestore database: Firebase Console → Build → Firestore Database → Create database."
           else
-            echo "Unexpected response:"; head -c 400 read_resp.json; echo
+            READ_STATE="unexpected-${READ_HTTP}"
+            echo "::error title=Firestore read test unexpected::HTTP ${READ_HTTP} — see job log."
           fi
+          echo "Read response (first 300 chars):"; head -c 300 read_resp.json; echo
 
           echo ""
           echo "── Write test (temporary document in '_setup_check') ──"
-          HTTP=$(curl -s -o write_resp.json -w "%{http_code}" -X POST \
+          WRITE_HTTP=$(curl -s -o write_resp.json -w "%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -d '{"fields":{"purpose":{"stringValue":"github-actions backend check"}}}' \
             "${BASE}/_setup_check?key=${KEY}")
-          echo "HTTP ${HTTP}"
+          echo "HTTP ${WRITE_HTTP}"
           DOC_NAME=$(node -e "try{const r=require('./write_resp.json');console.log(r.name||'')}catch{}")
-          if [ "$HTTP" = "200" ] && [ -n "$DOC_NAME" ]; then
-            echo "PASS — writes are currently allowed."
+          if [ "$WRITE_HTTP" = "200" ] && [ -n "$DOC_NAME" ]; then
+            WRITE_STATE="allowed"
+            echo "::notice title=Firestore writes OK::Writes are currently allowed (test doc created and removed)."
             echo "Cleaning up test document…"
             DEL_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "https://firestore.googleapis.com/v1/${DOC_NAME}?key=${KEY}")
             echo "Delete HTTP ${DEL_HTTP}"
             if [ "$DEL_HTTP" != "200" ]; then
-              echo "::warning::Could not delete the test document — remove it manually: ${DOC_NAME}"
+              echo "::warning title=Cleanup needed::Could not delete the test document — remove it manually: ${DOC_NAME}"
             fi
-          elif [ "$HTTP" = "403" ]; then
-            echo "WRITES BLOCKED — the current rules deny writes."
-            echo "Publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
-            head -c 400 write_resp.json; echo
+          elif [ "$WRITE_HTTP" = "403" ]; then
+            WRITE_STATE="blocked-by-rules"
+            echo "::error title=Firestore writes blocked::Current rules deny writes — publish the rules from firestore.rules (Firestore console → Rules → paste → Publish)."
+          elif [ "$WRITE_HTTP" = "404" ]; then
+            WRITE_STATE="database-missing"
           else
-            echo "(write test skipped or failed — see response)"; head -c 400 write_resp.json; echo
+            WRITE_STATE="unexpected-${WRITE_HTTP}"
           fi
+          echo "Write response (first 300 chars):"; head -c 300 write_resp.json; echo
+
+          # Compact state machine for the summary
+          if [ "$READ_STATE" = "database-missing" ] || [ "$WRITE_STATE" = "database-missing" ]; then
+            OVERALL="database-missing"
+          elif [ "$READ_STATE" = "allowed" ] && [ "$WRITE_STATE" = "allowed" ]; then
+            OVERALL="open"
+          elif [ "$READ_STATE" = "blocked-by-rules" ] || [ "$WRITE_STATE" = "blocked-by-rules" ]; then
+            OVERALL="locked"
+          else
+            OVERALL="unknown"
+          fi
+
+          {
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Public read (certificates) | ${READ_STATE} (HTTP ${READ_HTTP}) |"
+            echo "| Write (temp \\\`_setup_check\\\` doc) | ${WRITE_STATE} (HTTP ${WRITE_HTTP}) |"
+            echo ""
+          } >> "$SUMMARY"
+
+          case "$OVERALL" in
+            open)
+              {
+                echo "### ✅ Database is reachable and open"
+                echo "The app can read and write right now. **However**, open access usually means the database is in *test mode*, which either expires or allows anyone to write anything."
+                echo ""
+                echo "**Recommended:** publish the validated rules from [\`firestore.rules\`](./firestore.rules) — Firestore console → Rules → paste → Publish. The app keeps working (same permissions, but schema-validated writes and permanent)."
+              } >> "$SUMMARY"
+              ;;
+            locked)
+              {
+                echo "### ❌ Rules are blocking the app"
+                echo "Publish the rules from [\`firestore.rules\`](./firestore.rules):"
+                echo ""
+                echo "1. Firebase Console → Build → **Firestore Database** → **Rules** tab"
+                echo "2. Replace everything with the contents of \`firestore.rules\` from this repository"
+                echo "3. Click **Publish**"
+                echo ""
+                echo "Then re-run this workflow to confirm."
+              } >> "$SUMMARY"
+              exit 1
+              ;;
+            database-missing)
+              {
+                echo "### ❌ Firestore database does not exist yet"
+                echo "The project \`${PROJECT}\` has no Cloud Firestore database (the \`databaseURL\` in the Firebase config is for the Realtime Database, which this app does not use)."
+                echo ""
+                echo "1. Firebase Console → Build → **Firestore Database** → **Create database**"
+                echo "2. Choose **Production mode** and a region (e.g. asia-south1)"
+                echo "3. Publish the rules from [\`firestore.rules\`](./firestore.rules) on the Rules tab"
+                echo ""
+                echo "Then re-run this workflow to confirm."
+              } >> "$SUMMARY"
+              exit 1
+              ;;
+            *)
+              {
+                echo "### ⚠️ Could not determine database state"
+                echo "See the job log for the raw responses."
+              } >> "$SUMMARY"
+              ;;
+          esac
