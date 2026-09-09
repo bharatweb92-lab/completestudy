@@ -1,6 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ACADEMY_DATA, COURSES } from '../data';
-import { MapPin, Phone, Mail } from 'lucide-react';
+import { MapPin, Phone, Mail, Lock } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -51,6 +52,7 @@ export default function Footer() {
               <li><a href="#lab-tour" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Computer Lab Tour</a></li>
               <li><a href="#mentors" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Faculty Mentors</a></li>
               <li><a href="#reviews" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Student Reviews</a></li>
+              <li><a href="#verify" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Verify Certificate</a></li>
               <li><a href="#" className="hover:text-indigo-400 transition-colors flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-slate-600"></span> Back to Header Top</a></li>
             </ul>
           </div>
@@ -92,10 +94,18 @@ export default function Footer() {
 
         <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-500">
           <p>© {new Date().getFullYear()} {ACADEMY_DATA.name} (Ranchi). All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <span>Estd. {ACADEMY_DATA.founded}</span>
             <span className="w-1 h-1 rounded-full bg-slate-700"></span>
             <span>ISO 9001:2015 Center</span>
+            <Link
+              to="/admin"
+              id="admin-panel-button"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Admin Panel
+            </Link>
           </div>
         </div>
 

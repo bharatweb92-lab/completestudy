@@ -21,6 +21,7 @@ export default function Header() {
     { name: 'Lab Tour', href: '#lab-tour' },
     { name: 'Mentors', href: '#mentors' },
     { name: 'Reviews', href: '#reviews' },
+    { name: 'Certificate', href: '#verify' },
     { name: 'Find Us', href: '#find-us' },
   ];
 

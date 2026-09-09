@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Certificates issued by Complete Study.
+    //
+    // The public "Verify Certificate" section needs to read a certificate by
+    // enrollment number, so reads are public. Writes are validated against
+    // the exact document shape used by the admin panel.
+    //
+    // NOTE: this project uses a file-based admin login (per the project
+    // owner's request), so Firestore cannot distinguish the admin from the
+    // public. To harden this later, enable Firebase Authentication and
+    // restrict writes to the admin account — see README.md.
+    // ─────────────────────────────────────────────────────────────────────
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow create, update: if isValidCertificate(request.resource.data);
+      allow delete: if true;
+    }
+
+    function isValidCertificate(data) {
+      return data.keys().hasOnly([
+        'studentName',
+        'enrollmentNumber',
+        'certificateUrl',
+        'certificatePublicId',
+        'fileType',
+        'fileFormat',
+        'fileName',
+        'fileSizeBytes',
+        'uploadedAt'
+      ])
+      && data.studentName is string
+      && data.studentName.size() >= 2
+      && data.studentName.size() <= 100
+      && data.enrollmentNumber is string
+      && data.enrollmentNumber.size() >= 3
+      && data.enrollmentNumber.size() <= 50
+      && data.certificateUrl is string
+      && data.certificateUrl.matches('https://res\\.cloudinary\\.com/.*')
+      && data.certificatePublicId is string
+      && data.certificatePublicId.size() > 0
+      && data.certificatePublicId.size() <= 300
+      && data.fileType in ['pdf', 'image']
+      && data.fileFormat is string
+      && data.fileFormat.size() <= 20
+      && data.fileName is string
+      && data.fileName.size() <= 300
+      && data.fileSizeBytes is number
+      && data.fileSizeBytes >= 0
+      && data.fileSizeBytes <= 10485760
+      && data.uploadedAt is timestamp;
+    }
+  }
+}

@@ -3,34 +3,52 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import Header from './components/Header';
-import Hero from './components/Hero';
-import StatsGrid from './components/StatsGrid';
-import CourseExplorer from './components/CourseExplorer';
-import LabTour from './components/LabTour';
-import MentorsAndReviews from './components/MentorsAndReviews';
-import FAQ from './components/FAQ';
-import SeatReservation from './components/SeatReservation';
-import Footer from './components/Footer';
-import AdmissionPopup from './components/AdmissionPopup';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+import HomePage from './pages/HomePage';
+import RequireAdmin from './components/RequireAdmin';
+
+// Admin pages are code-split so the Firebase/Cloudinary code stays out of
+// the public homepage bundle.
+const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+
+/** Reset scroll when moving between pages (hash links on the homepage are unaffected). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <Header />
-      <main className="flex-grow">
-        <Hero />
-        <StatsGrid />
-        <CourseExplorer />
-        <LabTour />
-        <SeatReservation />
-        <MentorsAndReviews />
-        <FAQ />
-      </main>
-      <Footer />
-      <AdmissionPopup />
-    </div>
+    <BrowserRouter>
+      <ScrollToTop />
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminDashboardPage />
+              </RequireAdmin>
+            }
+          />
+          {/* Unknown routes fall back to the public site (also covers old links). */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }
-
